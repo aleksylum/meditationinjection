@@ -59,8 +59,8 @@ BOOL _tmain(int argc, CHAR* argv[])
 	std::wcout << "start\n";
 	CHAR* dllPath;
 	DWORD dllSize;
-
-
+	DWORD processId = strtoul(argv[1], &argv[2], 10);
+	std::wcout << processId;
 	try
 	{
 		CHAR path[MAX_PATH];
@@ -84,7 +84,6 @@ BOOL _tmain(int argc, CHAR* argv[])
 	HANDLE processHandle;
 	try
 	{
-		DWORD processId = GetPidByProcessName(argv[1]); //_TEXT(argv[1])
 		processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
 		if(processHandle == NULL)
 			throw std::exception("Handle is NULL for process");

@@ -74,7 +74,7 @@ std::wstring ConvertStringToWString(const std::string& str)
 }
 
 BOOL CheckSqlResult(SQLRETURN result) {
-	//SQLRETURN r = SQLExecDirectW(SqlStatementHandle, (SQLWCHAR*)ALLFORUNPATCHING, SQL_NTS);
+
 	if (result != SQL_SUCCESS && result != SQL_SUCCESS_WITH_INFO && result != SQL_NO_DATA) {
 		std::cout << result << std::endl;// LOG IT
 		throw ("Bad SQL Result status");
@@ -104,28 +104,35 @@ void UpdateStatus(std::list <string> updates) {
 
 void Patch(HMODULE lib) {
 
-	
 	typedef const char* (__cdecl* _getPatchQuery)();
 	auto getPatchQuery = (_getPatchQuery)GetProcAddress(lib, "_getPatchQuery");
-	auto patchQuery = getPatchQuery();
-	SQLRETURN allForPatchingResult = SQL_SUCCESS != SQLExecDirectW(SqlStatementHandle, (SQLWCHAR*)patchQuery, SQL_NTS);//(SQLWCHAR*)ALLFORPATCHING
+	auto patchQuery = getPatchQuery();// return smth like $@"SELECT [value] FROM {PatchTableName} WHERE [pid] = {process.Id} AND [process_name] = '{process.ProcessName}' AND [status] = {(Int32) status}"
+
+	wstring ws = ConvertStringToWString(patchQuery);
+	SQLWCHAR* x = (SQLWCHAR*)ws.c_str();
+	SQLRETURN allForPatchingResult = SQLExecDirectW(SqlStatementHandle, x, SQL_NTS);
 	CheckSqlResult(allForPatchingResult);
 
 	typedef const char* (__cdecl* _patch)(const char* a);
-	auto patch = (_patch)GetProcAddress(lib, "_patch");
+	auto patchMet = (_patch)GetProcAddress(lib, "_patch");
 
 	SQLCHAR queryRes[SQL_RESULT_LEN];
 	SQLLEN ptrQueryRes;
 
 	std::list <string> results;
-	while (SQLFetch(SqlStatementHandle) == SQL_SUCCESS) {
+	while (true) {
+		auto r = SQLFetch(SqlStatementHandle);
+		std::cout << r;
+
+		if (r != SQL_SUCCESS && r != SQL_SUCCESS_WITH_INFO)
+			break;
 
 		try {
 			SQLGetData(SqlStatementHandle, 1, SQL_CHAR, queryRes, SQL_RESULT_LEN, &ptrQueryRes);
 			cout << "\nResult:\n";
 			cout << queryRes << endl;
 
-			const char* res = patch((char*)queryRes);
+			const char* res = patchMet((char*)queryRes);
 
 			cout << res << endl;
 			if (strlen(res)) {
@@ -149,27 +156,35 @@ void Patch(HMODULE lib) {
 }
 
 void Unpatch(HMODULE lib) {
-
+	cout << "\n TRYING TO UNPATCH:\n";
 	typedef const char* (__cdecl* _getUnpatchQuery)();
 	auto getUnpatchQuery = (_getUnpatchQuery)GetProcAddress(lib, "_getUnpatchQuery");
 	auto unpatchQuery = getUnpatchQuery();
-	SQLRETURN allForUnpResult = SQLExecDirectW(SqlStatementHandle, (SQLWCHAR*)unpatchQuery, SQL_NTS);
-
+	cout << unpatchQuery;
+	wstring ws = ConvertStringToWString(unpatchQuery);
+	SQLWCHAR* x = (SQLWCHAR*)ws.c_str();
+	SQLRETURN allForUnpResult = SQLExecDirectW(SqlStatementHandle, x, SQL_NTS);
 	CheckSqlResult(allForUnpResult);
 
 	typedef const char* (__cdecl* _unpatch)(const char* a);
-	auto unpatch = (_unpatch)GetProcAddress(lib, "_unpatch");
+	auto unpatchMet = (_unpatch)GetProcAddress(lib, "_unpatch");
 
 	SQLCHAR queryRes[SQL_RESULT_LEN];
 	SQLLEN ptrQueryRes;
 
 	std::list <string> results;
-	while (SQLFetch(SqlStatementHandle) == SQL_SUCCESS) {
+	while (true) {
+		auto r = SQLFetch(SqlStatementHandle);
+		std::cout << r;
+
+		if (r != SQL_SUCCESS && r != SQL_SUCCESS_WITH_INFO)
+			break;
+
 		try {
 			SQLGetData(SqlStatementHandle, 1, SQL_CHAR, queryRes, SQL_RESULT_LEN, &ptrQueryRes);
 			cout << "\nResult:\n";
 			cout << queryRes << endl;
-			const char* res = unpatch((char*)queryRes);
+			const char* res = unpatchMet((char*)queryRes);
 			cout << res << endl;
 
 			if (strlen(res)) {
@@ -190,6 +205,7 @@ void Unpatch(HMODULE lib) {
 	CheckSqlResult(allocResult);
 
 	UpdateStatus(results);
+	cout << "\n  UNPATCH SUCCEEDED:\n";
 }
 
 BOOL Execute() {
@@ -242,20 +258,32 @@ BOOL Execute() {
 
 extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
-	cout << "HiHi I am here now!!!";
-
-	BOOL result;
-	try
+	switch (fdwReason)
 	{
-		result = Execute();
-	}
-	catch (const std::exception& e) {
+	case DLL_PROCESS_ATTACH:
+		cout << "HiHi I am here now!!!";
+		try
+		{
+			Execute();
+		}
+		catch (const std::exception& e) {
 
-		std::cerr << e.what() << std::endl;
-		Log("[EXCEPTION] During DllMain executing ", (char*)e.what());
-		result = FALSE;
+			std::cerr << e.what() << std::endl;
+			Log("[EXCEPTION] During DllMain executing ", (char*)e.what());
+
+		}
+		CloseHandles();
+		break;
+		
+	case DLL_PROCESS_DETACH:
+		break;
+
+	case DLL_THREAD_ATTACH:
+		break;
+
+	case DLL_THREAD_DETACH:
+		break;
 	}
-	CloseHandles();
-	return result;
+	return  TRUE;
 }
 
