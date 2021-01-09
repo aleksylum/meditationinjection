@@ -1,23 +1,25 @@
 //Copyright (c) 2020 Alexandra Kravtsova (aleksylum)
 
 #include "pch.h"
+
+#include <atlbase.h>
 #include <windows.h>
-#include "Processthreadsapi.h"
 #include <sstream>
 #include <iomanip>
 #include <iostream>
-#include <windows.h>
 #include <iostream>
 #include <sqltypes.h>
 #include <sql.h>
 #include <sqlext.h>
 #include <list>
-#include <filesystem>
 #include <fstream>
+#include <process.h>
 
 using namespace std;
 
-const LPCWSTR LIBRARY = L"C:\\Users\\nhor_nhor\\Desktop\\meditation\\Meditation.Patches\\bin\\Debug\\x64\\Meditation.Patches.dll";//TODO NHOR: do relative
+const LPCWSTR SUBKEY = L"MeditationPatchesDll";
+const LPCWSTR KEY = L"SOFTWARE\\Meditation";
+const int BUFFER_SIZE = 1024;
 const char* LOG_FILE = "C:\\ProgramData\\Meditation\\Diag\\Injectee.txt";
 const int MAX_LOG_SIZE = 1024;
 
@@ -216,9 +218,20 @@ BOOL Execute() {
 		return FALSE;
 	if (SQL_SUCCESS != SQLAllocHandle(SQL_HANDLE_DBC, SqlEnvironmentHandle, &SqlConnectHandle))
 		return FALSE;
+	
+	DWORD dwType = REG_SZ;
+	HKEY hKey = 0;
+	char value[BUFFER_SIZE];
+	DWORD value_length = BUFFER_SIZE;
 
-	HMODULE lib = LoadLibrary(LIBRARY);
+	RegOpenKey(HKEY_LOCAL_MACHINE, KEY, &hKey);
+	RegQueryValueEx(hKey, SUBKEY, NULL, &dwType, (LPBYTE)&value, &value_length);
+	for (int i = 1; i < value_length / 2; ++i)
+		value[i] = value[2 * i];
 
+	std::wstring res(value, value + value_length);
+	HMODULE lib = LoadLibrary(res.c_str());
+	
 	typedef const char* (__cdecl* _getConnString)();
 	auto getConnString = (_getConnString)GetProcAddress(lib, "_getConnString");
 	const char* connRes = getConnString();
@@ -256,12 +269,13 @@ BOOL Execute() {
 	return TRUE;
 }
 
+
 extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
 	{
 	case DLL_PROCESS_ATTACH:
-		cout << "HiHi I am here now!!!";
+		cout << "Hi, I am in DllMain!";
 		try
 		{
 			Execute();
@@ -273,16 +287,14 @@ extern "C" __declspec(dllexport) BOOL APIENTRY DllMain(HINSTANCE hinstDLL, DWORD
 
 		}
 		CloseHandles();
+		//DllSelfUnloading((HMODULE)hinstDLL);
 		break;
 		
 	case DLL_PROCESS_DETACH:
-		break;
-
+	case DLL_THREAD_DETACH:
 	case DLL_THREAD_ATTACH:
 		break;
 
-	case DLL_THREAD_DETACH:
-		break;
 	}
 	return  TRUE;
 }

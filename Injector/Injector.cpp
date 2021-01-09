@@ -28,32 +28,6 @@ void Log(const char* prefix, char* data) {
 	LogMessage(message);
 }
 
-DWORD GetPidByProcessName(LPCSTR processName)
-{
-	HANDLE snapshot;
-	PROCESSENTRY32 pe32 = { 0 };
-
-	pe32.dwSize = sizeof(PROCESSENTRY32);
-
-	snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);//https://docs.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot
-	if (snapshot == INVALID_HANDLE_VALUE)
-	{
-		throw std::exception("Can not create snapshot");
-	}
-
-	if (Process32First(snapshot, &pe32))
-	{
-		do
-		{
-			if (_tcscmp(pe32.szExeFile, processName) == 0)
-			{
-				return pe32.th32ProcessID;
-			}
-		} while (Process32Next(snapshot, &pe32));
-	}
-	throw std::exception("Can not find process for injection");
-}
-
 BOOL _tmain(int argc, CHAR* argv[])
 {
 	std::wcout << "start\n";
